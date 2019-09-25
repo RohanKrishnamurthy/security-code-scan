@@ -122,6 +122,7 @@ namespace SecurityCodeScan.Config
             }
         }
 
+        public bool Disable                            { get; private set; }
         public bool ReportAnalysisCompletion           { get; private set; }
         public bool AuditMode                          { get; private set; }
         public int  PasswordValidatorRequiredLength    { get; private set; }
@@ -154,6 +155,9 @@ namespace SecurityCodeScan.Config
         {
             if (config.TaintTypes != null)
                 RegisterTaintTypes(config.TaintTypes);
+
+            if (config.Disable.HasValue)
+                Disable = config.Disable.Value;
 
             if (config.ReportAnalysisCompletion.HasValue)
                 ReportAnalysisCompletion = config.ReportAnalysisCompletion.Value;

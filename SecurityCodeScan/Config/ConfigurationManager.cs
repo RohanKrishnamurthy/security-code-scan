@@ -108,7 +108,7 @@ namespace SecurityCodeScan.Config
 
         private static readonly Lazy<ConfigData> CachedBuiltInConfiguration = new Lazy<ConfigData>(() => Reader.GetBuiltinConfiguration());
 
-        public Configuration GetBuiltInAndUserConfiguration()
+        private Configuration GetBuiltInAndUserConfiguration()
         {
             var configuration = new Configuration(CachedBuiltInConfiguration.Value);
 
@@ -145,6 +145,7 @@ namespace SecurityCodeScan.Config
     /// </summary>
     internal class ConfigData
     {
+        public bool?                                   Disable                             { get; set; }
         public bool?                                   ReportAnalysisCompletion            { get; set; }
         public bool?                                   AuditMode                           { get; set; }
         public int?                                    PasswordValidatorRequiredLength     { get; set; }

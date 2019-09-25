@@ -6,6 +6,9 @@ ReportAnalysisCompletion: false
 # Set to 'true' to see more warnings
 AuditMode: false
 
+# Set to 'true' to disable all analysis.
+Disable: false
+
 # Allows to define custom anti CSRF attributes and conditions
 # The format is:
 # <<<

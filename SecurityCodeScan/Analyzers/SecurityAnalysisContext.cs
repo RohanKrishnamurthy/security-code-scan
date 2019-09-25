@@ -42,9 +42,12 @@ namespace SecurityCodeScan.Analyzers
         private void OnCompilationStartAction(CompilationStartAnalysisContext context)
         {
             ProjectConfiguration = new ConfigurationManager().GetProjectConfiguration(context.Options.AdditionalFiles);
-            foreach (var action in OnCompilationStartActions)
+            if (!ProjectConfiguration.Disable)
             {
-                action(context, ProjectConfiguration);
+                foreach (var action in OnCompilationStartActions)
+                {
+                    action(context, ProjectConfiguration);
+                }
             }
         }
 
@@ -59,13 +62,16 @@ namespace SecurityCodeScan.Analyzers
 
         private void OnCompilationAction(CompilationAnalysisContext context)
         {
-            foreach (var action in OnCompilationActions)
+            if (!ProjectConfiguration.Disable)
             {
-                action(context);
-            }
+                foreach (var action in OnCompilationActions)
+                {
+                    action(context);
+                }
 
-            if (ProjectConfiguration.ReportAnalysisCompletion)
-                FinalAnalyzer.OnCompilationAction(context);
+                if (ProjectConfiguration.ReportAnalysisCompletion)
+                    FinalAnalyzer.OnCompilationAction(context);
+            }
         }
 
         public void RegisterCompilationAction(Action<CompilationAnalysisContext> action)

@@ -3,9 +3,12 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using SecurityCodeScan.Analyzers;
+using SecurityCodeScan.Analyzers.Taint;
 using SecurityCodeScan.Config;
 using SecurityCodeScan.Test.Helpers;
 
@@ -20,10 +23,26 @@ namespace SecurityCodeScan.Test.Config
             StartupConfiguration = Manager.GetProjectConfiguration(ImmutableArray<AdditionalText>.Empty);
         }
 
+        private static MetadataReference SystemWebReference = MetadataReference.CreateFromFile(typeof(System.Web.HttpResponse).Assembly.Location);
+
+        protected override IEnumerable<MetadataReference> GetAdditionalReferences()
+        {
+            yield return SystemWebReference;
+        }
+
         protected override IEnumerable<DiagnosticAnalyzer> GetDiagnosticAnalyzers(string language)
         {
-            return Enumerable.Empty<DiagnosticAnalyzer>();
+            if (language == LanguageNames.CSharp)
+                return new DiagnosticAnalyzer[] { new CSharpAnalyzers(new TaintAnalyzerCSharp()) };
+            else
+                return new DiagnosticAnalyzer[] { new VBasicAnalyzers(new TaintAnalyzerVisualBasic()) };
         }
+
+        /*protected override IEnumerable<DiagnosticAnalyzer> GetDiagnosticAnalyzers(string language)
+        {
+            yield return new Anal
+            return Enumerable.Empty<DiagnosticAnalyzer>();
+        }*/
 
         private readonly ConfigurationManager Manager;
         private readonly Configuration        StartupConfiguration;
@@ -35,9 +54,10 @@ namespace SecurityCodeScan.Test.Config
             var newConfig = Manager.GetProjectConfiguration(options.AdditionalFiles);
 
             //ensuring that field count matches count of properties tested below (test should fail and be updated if someone adds new field in Configuration)
-            Assert.AreEqual(10, typeof(Configuration).GetProperties(BindingFlags.Instance | BindingFlags.Public).Length);
+            Assert.AreEqual(11, typeof(Configuration).GetProperties(BindingFlags.Instance | BindingFlags.Public).Length);
 
             Assert.AreEqual(StartupConfiguration.ReportAnalysisCompletion,                  newConfig.ReportAnalysisCompletion);
+            Assert.AreEqual(StartupConfiguration.Disable,                                   newConfig.Disable);
             Assert.AreEqual(StartupConfiguration.AuditMode,                                 newConfig.AuditMode);
             Assert.AreEqual(StartupConfiguration.Behavior.Count,                            newConfig.Behavior.Count);
             Assert.AreEqual(StartupConfiguration.TaintEntryPoints.Count,                    newConfig.TaintEntryPoints.Count);
@@ -56,9 +76,10 @@ namespace SecurityCodeScan.Test.Config
             var newConfig = Manager.GetProjectConfiguration(options.AdditionalFiles);
 
             // ensuring that field count matches count of properties tested below
-            Assert.AreEqual(10, typeof(Configuration).GetProperties(BindingFlags.Instance | BindingFlags.Public).Length);
+            Assert.AreEqual(11, typeof(Configuration).GetProperties(BindingFlags.Instance | BindingFlags.Public).Length);
 
             Assert.AreEqual(StartupConfiguration.ReportAnalysisCompletion,                  newConfig.ReportAnalysisCompletion);
+            Assert.AreEqual(StartupConfiguration.Disable,                                   newConfig.Disable);
             Assert.AreEqual(StartupConfiguration.AuditMode,                                 newConfig.AuditMode);
             Assert.AreEqual(StartupConfiguration.Behavior.Count,                            newConfig.Behavior.Count);
             Assert.AreEqual(StartupConfiguration.TaintEntryPoints.Count,                    newConfig.TaintEntryPoints.Count);
@@ -131,6 +152,70 @@ TaintTypes: {payload}");
                 Assert.ThrowsException<Exception>(() => Manager.GetProjectConfiguration(options.AdditionalFiles));
             else
                 Manager.GetProjectConfiguration(options.AdditionalFiles);
+        }
+
+        [DataTestMethod]
+        [DataRow("true", false)]
+        [DataRow("false", true)]
+        public async Task ConditionalDisabling(string disableValue, bool expectsDiagnostics)
+        {
+            var config = ConfigurationTest.CreateAnalyzersOptionsWithConfig($@"
+Disable: {disableValue}
+
+TaintEntryPoints:
+  AAA:
+    ClassName: OpenRedirect"
+            );
+
+            var cSharpTest = @"
+using System.Web;
+
+class OpenRedirect
+{
+    public static HttpResponse Response = null;
+
+    public void Run(string input)
+    {
+        Response.Redirect(input);
+    }
+}
+";
+
+            var visualBasicTest = $@"
+Imports System.Web
+
+Class OpenRedirect
+
+    Public Shared Response As HttpResponse
+
+    Public Sub Run(input As String)
+
+        Response.Redirect(input)
+
+    End Sub
+
+End Class
+";
+            DiagnosticResult[] expected;
+            if (expectsDiagnostics)
+            {
+                expected =
+                    new[]
+                    {
+                        new DiagnosticResult
+                        {
+                            Id       = "SCS0027",
+                            Severity = DiagnosticSeverity.Warning
+                        }.WithLocation(10, 27)
+                    };
+            }
+            else
+            {
+                expected = new DiagnosticResult[0];
+            }
+
+            await VerifyCSharpDiagnostic(cSharpTest, expected, config).ConfigureAwait(false);
+            await VerifyVisualBasicDiagnostic(visualBasicTest, expected, config).ConfigureAwait(false);
         }
     }
 }
